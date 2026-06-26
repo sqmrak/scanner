@@ -167,6 +167,9 @@ fn merge_profile(dst: &mut LayerProfile, src: LayerProfile) {
     dst.toolchains.extend(src.toolchains);
     dst.man.extend(src.man);
     dst.mime += src.mime;
+    dst.mime_paths.extend(src.mime_paths);
+    dst.autostart.extend(src.autostart);
+    dst.dbus_services.extend(src.dbus_services);
     dst.firmware += src.firmware;
 }
 
@@ -199,6 +202,9 @@ fn sort(p: &mut LayerProfile) {
         p.man
     );
     p.pm_dirs.sort();
+    p.mime_paths.sort();
+    p.autostart.sort();
+    p.dbus_services.sort();
 }
 
 /// scan several roots with the built-in bin and lib roots.

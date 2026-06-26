@@ -43,6 +43,12 @@ pub struct LayerProfile {
     pub toolchains: Vec<Toolchain>,
     /// count of xml mime-type files under usr/share/mime
     pub mime: usize,
+    /// relative paths of xml mime-type files under usr/share/mime
+    pub mime_paths: Vec<PathBuf>,
+    /// .desktop files under /etc/xdg/autostart and usr/share/autostart
+    pub autostart: Vec<PathBuf>,
+    /// D-Bus service files under share/dbus-1/services
+    pub dbus_services: Vec<PathBuf>,
     /// count of firmware blobs under lib/firmware
     pub firmware: usize,
     /// man pages found under a man/ tree

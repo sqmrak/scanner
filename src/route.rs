@@ -217,6 +217,14 @@ fn file_route(
         }
         return;
     }
+    if is_autostart(rel, relp) {
+        p.autostart.push(relp.to_path_buf());
+        return;
+    }
+    if is_dbus_service(rel, relp) {
+        p.dbus_services.push(relp.to_path_buf());
+        return;
+    }
     if let Some(kind) = fhs_share(relp) {
         collect_share(kind, relp, abs, p);
         return;
@@ -226,6 +234,7 @@ fn file_route(
         && relp.extension().and_then(|e| e.to_str()) == Some("xml")
     {
         p.mime += 1;
+        p.mime_paths.push(relp.to_path_buf());
         return;
     }
     if !p.fhs {
@@ -441,4 +450,13 @@ fn is_desktop(rel: &Path) -> bool {
 
 fn is_firmware(rel: &str) -> bool {
     rel.contains("/firmware/") || rel.starts_with("firmware/")
+}
+
+fn is_autostart(rel: &str, relp: &Path) -> bool {
+    is_desktop(relp) && rel.contains("/autostart/")
+}
+
+fn is_dbus_service(rel: &str, relp: &Path) -> bool {
+    rel.contains("/dbus-1/services/")
+        && relp.extension().and_then(|e| e.to_str()) == Some("service")
 }
