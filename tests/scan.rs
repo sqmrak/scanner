@@ -861,3 +861,29 @@ fn mixed_libc() {
     // libc is the first in sorted order (usr/bin/app with musl comes first)
     assert_eq!(p.libc.as_ref().unwrap().name, "ld-musl-x86_64");
 }
+
+#[test]
+fn custom_bin_roots() {
+    let t = Tmp::new();
+    t.dir("etc");
+    // a distro that puts binaries under /System/Applications/
+    t.file("System/Applications/bash", &dyn_exe("/lib/ld-linux-x86-64.so.2"));
+    t.file("System/Applications/ls", &static_exe());
+    t.file("System/Libraries/libz.so.1", b"x");
+
+    // built-in only: misses the custom layout
+    let p_default = scanner::scan(&t.0);
+    assert!(p_default.bin.is_empty());
+    assert!(p_default.lib.is_empty());
+
+    // with custom roots: detects binaries and libs
+    let config = scanner::ScanConfig::new()
+        .with_bin_root("System/Applications")
+        .with_lib_root("System/Libraries");
+    let p = scanner::scan_with(&t.0, &config);
+    assert_eq!(p.bin.len(), 2);
+    assert!(p.bin.iter().any(|b| b.path.ends_with("bash") && b.dynamic));
+    assert!(p.bin.iter().any(|b| b.path.ends_with("ls") && !b.dynamic));
+    assert_eq!(p.lib.len(), 1);
+    assert!(p.lib.iter().any(|l| l.path.ends_with("libz.so.1")));
+}

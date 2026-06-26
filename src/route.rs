@@ -3,6 +3,7 @@
 use crate::parse::{cursors, desktop, fonts, icons, libs, man, modules, services, themes};
 use crate::profile::{LayerProfile, Locale, Theme};
 use crate::read;
+use crate::ScanConfig;
 use std::path::{Path, PathBuf};
 
 // sample size for service probe, early-exit caps actual opens below this
@@ -21,8 +22,9 @@ pub(crate) fn descend(
     p: &mut LayerProfile,
     pending: &mut Vec<(PathBuf, PathBuf)>,
     depth: usize,
+    config: &ScanConfig,
 ) {
-    enter(read::entries(dir), root, p, depth, pending);
+    enter(read::entries(dir), root, p, depth, pending, config);
 }
 
 fn enter(
@@ -31,6 +33,7 @@ fn enter(
     p: &mut LayerProfile,
     depth: usize,
     pending: &mut Vec<(PathBuf, PathBuf)>,
+    config: &ScanConfig,
 ) {
     for child in children {
         let Ok(rel) = child.path.strip_prefix(root) else {
@@ -38,10 +41,13 @@ fn enter(
         };
         let rels = rel.to_string_lossy();
         if !child.is_dir {
-            file_route(&rels, rel, &child.path, p, pending);
+            file_route(&rels, rel, &child.path, p, pending, config);
             continue;
         }
-        match dir_route(&rels, p.fhs) {
+        if is_pm_data(&rels) {
+            continue;
+        }
+        match dir_route(&rels, p.fhs, config) {
             Dir::Theme(name) => {
                 let kind = themes::kind(&child.path);
                 p.themes.push(Theme { path: rel.to_path_buf(), name, kind });
@@ -52,8 +58,8 @@ fn enter(
                     p.cursors.push(c);
                 }
             }
-            Dir::Descend => descend(&child.path, root, p, pending, 0),
-            Dir::Unknown => probe_unknown(&child.path, root, p, depth + 1, pending),
+            Dir::Descend => descend(&child.path, root, p, pending, 0, config),
+            Dir::Unknown => probe_unknown(&child.path, root, p, depth + 1, pending, config),
         }
     }
 }
@@ -64,6 +70,7 @@ fn probe_unknown(
     p: &mut LayerProfile,
     depth: usize,
     pending: &mut Vec<(PathBuf, PathBuf)>,
+    config: &ScanConfig,
 ) {
     if depth >= PROBE_DEPTH {
         return;
@@ -100,7 +107,7 @@ fn probe_unknown(
     if has_more {
         return;
     }
-    enter(probed, root, p, depth, pending);
+    enter(probed, root, p, depth, pending, config);
 }
 
 // distinct shapes in the sample: extension for a file, "/" for a subdir,
@@ -149,7 +156,7 @@ enum Dir {
     Unknown,
 }
 
-fn dir_route(rel: &str, fhs: bool) -> Dir {
+fn dir_route(rel: &str, fhs: bool, config: &ScanConfig) -> Dir {
     if let Some(n) = name_after_prefix(rel, "usr/share/themes/") {
         return Dir::Theme(n);
     }
@@ -170,7 +177,7 @@ fn dir_route(rel: &str, fhs: bool) -> Dir {
             }
         }
     }
-    if is_resource_dir(rel) {
+    if is_resource_dir(rel, config) {
         return Dir::Descend;
     }
     Dir::Unknown
@@ -182,6 +189,7 @@ fn file_route(
     abs: &Path,
     p: &mut LayerProfile,
     pending: &mut Vec<(PathBuf, PathBuf)>,
+    config: &ScanConfig,
 ) {
     if rel.contains("/lib/modules/") {
         if let Some(m) = modules::parse(relp) {
@@ -189,11 +197,11 @@ fn file_route(
         }
         return;
     }
-    if under_any(rel, read::BIN_ROOTS) {
+    if under_any(rel, read::BIN_ROOTS) || under_custom(rel, &config.bin_roots) {
         pending.push((relp.to_path_buf(), abs.to_path_buf()));
         return;
     }
-    if under_any(rel, read::LIB_ROOTS) {
+    if under_any(rel, read::LIB_ROOTS) || under_custom(rel, &config.lib_roots) {
         if is_shared_library(rel) {
             p.lib.push(libs::parse(relp, abs));
         }
@@ -253,12 +261,19 @@ fn non_fhs_role(rel: &str) -> Option<&'static str> {
     }
 }
 
-fn is_resource_dir(rel: &str) -> bool {
+// pm data dirs are pre-counted by parse::pm, skip the tree walk into them
+fn is_pm_data(rel: &str) -> bool {
+    rel == "var/lib" || rel == "var/db" || rel.starts_with("var/lib/") || rel.starts_with("var/db/")
+}
+
+fn is_resource_dir(rel: &str, config: &ScanConfig) -> bool {
     let leaf = rel.rsplit('/').next().unwrap_or(rel);
     matches!(leaf, "bin" | "sbin" | "libexec" | "games" | "lib" | "lib64" | "modules" | "firmware")
         || rel.contains("/lib/modules/")
         || rel.contains("/share/")
         || rel.starts_with("share/")
+        || under_custom(rel, &config.bin_roots)
+        || under_custom(rel, &config.lib_roots)
 }
 
 fn cursors_theme(rel: &str) -> Option<String> {
@@ -400,6 +415,12 @@ fn under_any(rel: &str, roots: &[&str]) -> bool {
     roots
         .iter()
         .any(|r| rel.starts_with(r) && rel.as_bytes().get(r.len()).is_none_or(|&b| b == b'/'))
+}
+
+fn under_custom(rel: &str, roots: &[String]) -> bool {
+    roots.iter().any(|r| {
+        rel.starts_with(r.as_str()) && rel.as_bytes().get(r.len()).is_none_or(|&b| b == b'/')
+    })
 }
 
 fn is_shared_library(rel: &str) -> bool {

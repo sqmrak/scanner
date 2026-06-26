@@ -28,12 +28,49 @@ impl fmt::Display for ScanError {
     }
 }
 
+/// custom bin and lib roots for non-standard layouts.
+/// register paths like `/System/Applications` so files under them
+/// are detected as binaries without recompiling the scanner
+#[derive(Clone, Debug, Default)]
+pub struct ScanConfig {
+    /// extra directories whose direct children are treated as binaries.
+    /// no trailing slash. the built-in list always applies
+    pub bin_roots: Vec<String>,
+    /// extra directories whose direct children are treated as libraries.
+    /// no trailing slash. the built-in list always applies
+    pub lib_roots: Vec<String>,
+}
+
+impl ScanConfig {
+    /// empty config: only the built-in bin and lib roots are used
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// register an extra bin root
+    pub fn with_bin_root(mut self, path: impl Into<String>) -> Self {
+        self.bin_roots.push(path.into());
+        self
+    }
+
+    /// register an extra lib root
+    pub fn with_lib_root(mut self, path: impl Into<String>) -> Self {
+        self.lib_roots.push(path.into());
+        self
+    }
+}
+
 const PARALLEL_THRESHOLD: usize = 3;
 
-/// scan a rootfs tree, return a profile of everything found.
+/// scan a rootfs tree with the built-in bin and lib roots
+pub fn scan(root: &Path) -> LayerProfile {
+    scan_with(root, &ScanConfig::default())
+}
+
+/// scan a rootfs tree with custom bin and lib roots registered in `config`.
 /// top-level directories descend in parallel, then ELF parsing is
 /// deferred and also parallelised. paths in the profile are relative to the root
-pub fn scan(root: &Path) -> LayerProfile {
+pub fn scan_with(root: &Path, config: &ScanConfig) -> LayerProfile {
     let fhs = parse::fhs::detect(root);
     let pm_dirs = parse::pm::dirs(root);
 
@@ -46,12 +83,12 @@ pub fn scan(root: &Path) -> LayerProfile {
         .collect();
 
     let results: Vec<_> = if top_dirs.len() < PARALLEL_THRESHOLD {
-        top_dirs.iter().map(|dir| traverse(dir, root, fhs)).collect()
+        top_dirs.iter().map(|dir| traverse(dir, root, fhs, config)).collect()
     } else {
         std::thread::scope(|s| {
             let handles: Vec<_> = top_dirs
                 .into_iter()
-                .map(|dir| s.spawn(move || traverse(&dir, root, fhs)))
+                .map(|dir| s.spawn(move || traverse(&dir, root, fhs, config)))
                 .collect();
             handles.into_iter().map(|h| h.join().unwrap()).collect()
         })
@@ -92,10 +129,15 @@ pub fn scan(root: &Path) -> LayerProfile {
 }
 
 // descend a single directory and return its profile and pending ELF paths
-fn traverse(dir: &Path, root: &Path, fhs: bool) -> (LayerProfile, Vec<(PathBuf, PathBuf)>) {
+fn traverse(
+    dir: &Path,
+    root: &Path,
+    fhs: bool,
+    config: &ScanConfig,
+) -> (LayerProfile, Vec<(PathBuf, PathBuf)>) {
     let mut p = LayerProfile { fhs, ..Default::default() };
     let mut pending = Vec::new();
-    route::descend(dir, root, &mut p, &mut pending, 1);
+    route::descend(dir, root, &mut p, &mut pending, 1, config);
     (p, pending)
 }
 
@@ -149,15 +191,24 @@ fn sort(p: &mut LayerProfile) {
     p.pm_dirs.sort();
 }
 
-/// scan several roots in parallel. a thread panic in one root does not
-/// affect the others; the error carries the panic message.
-/// sequential when fewer than 3 roots, otherwise `std::thread::scope`
+/// scan several roots with the built-in bin and lib roots.
+/// a thread panic in one root does not affect the others;
+/// the error carries the panic message
 pub fn scan_many(roots: &[std::path::PathBuf]) -> Vec<Result<LayerProfile, ScanError>> {
+    scan_many_with(roots, &ScanConfig::default())
+}
+
+/// scan several roots with custom bin and lib roots.
+/// sequential when fewer than 3 roots, otherwise `std::thread::scope`
+pub fn scan_many_with(
+    roots: &[std::path::PathBuf],
+    config: &ScanConfig,
+) -> Vec<Result<LayerProfile, ScanError>> {
     if roots.len() < PARALLEL_THRESHOLD {
-        return roots.iter().map(|r| caught(|| scan(r))).collect();
+        return roots.iter().map(|r| caught(|| scan_with(r, config))).collect();
     }
     std::thread::scope(|s| {
-        let handles: Vec<_> = roots.iter().map(|r| s.spawn(|| scan(r))).collect();
+        let handles: Vec<_> = roots.iter().map(|r| s.spawn(|| scan_with(r, config))).collect();
         handles.into_iter().map(|h| h.join().map_err(panic_to_error)).collect()
     })
 }
