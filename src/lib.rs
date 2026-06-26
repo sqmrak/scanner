@@ -39,6 +39,10 @@ pub struct ScanConfig {
     /// extra directories whose direct children are treated as libraries.
     /// no trailing slash. the built-in list always applies
     pub lib_roots: Vec<String>,
+    /// max depth for probing unclassified directories. the built-in default
+    /// (4) works for standard trees; deep Nix or Gobo layouts may need more.
+    /// set to 0 to use the built-in default
+    pub probe_depth: usize,
 }
 
 impl ScanConfig {
@@ -56,6 +60,12 @@ impl ScanConfig {
     /// register an extra lib root
     pub fn with_lib_root(mut self, path: impl Into<String>) -> Self {
         self.lib_roots.push(path.into());
+        self
+    }
+
+    /// override the probe depth for unclassified directories
+    pub fn with_probe_depth(mut self, depth: usize) -> Self {
+        self.probe_depth = depth;
         self
     }
 }

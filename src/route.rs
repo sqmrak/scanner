@@ -12,9 +12,10 @@ const SERVICE_SAMPLE: usize = 12;
 const MAX_EXTENSIONS: usize = 10;
 // bulk data dir width, resource dirs (bin/lib/share) exempt
 const MAX_FANOUT: usize = 500;
-// probe_unknown depth cap: service collections are at depth ≤3 (etc/init.d,
-// usr/lib/systemd/system), deeper is source or data
-const PROBE_DEPTH: usize = 4;
+// probe_unknown depth cap (built-in or overridden in ScanConfig): service
+// collections sit at depth ≤3 (etc/init.d, usr/lib/systemd/system), deeper
+// is source or data. deep Nix or Gobo layouts may need more
+const DEFAULT_DEPTH: usize = 4;
 
 pub(crate) fn descend(
     dir: &Path,
@@ -74,7 +75,7 @@ fn probe_unknown(
     pending: &mut Vec<(PathBuf, PathBuf)>,
     config: &ScanConfig,
 ) {
-    if depth >= PROBE_DEPTH {
+    if depth >= probe_limit(config) {
         return;
     }
     let (probed, has_more) = read::probe(dir, MAX_FANOUT);
@@ -411,6 +412,10 @@ fn name_after_prefix(rel: &str, prefix: &str) -> Option<String> {
     let rest = rel.strip_prefix(prefix)?;
     let name = rest.split('/').next()?;
     if name.is_empty() { None } else { Some(name.to_string()) }
+}
+
+fn probe_limit(config: &ScanConfig) -> usize {
+    if config.probe_depth > 0 { config.probe_depth } else { DEFAULT_DEPTH }
 }
 
 fn under_any(rel: &str, roots: &[&str]) -> bool {
