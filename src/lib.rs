@@ -10,7 +10,23 @@ pub use profile::{
     Session, Theme, Toolchain,
 };
 
+use std::fmt;
 use std::path::{Path, PathBuf};
+
+/// a scan failure
+#[derive(Debug, Clone)]
+pub enum ScanError {
+    /// a thread performing the scan panicked
+    Panic(String),
+}
+
+impl fmt::Display for ScanError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ScanError::Panic(msg) => write!(f, "scan panicked: {msg}"),
+        }
+    }
+}
 
 const PARALLEL_THRESHOLD: usize = 3;
 
@@ -133,28 +149,30 @@ fn sort(p: &mut LayerProfile) {
     p.pm_dirs.sort();
 }
 
-/// scan several roots in parallel. panics are caught as `Err(String)`.
+/// scan several roots in parallel. a thread panic in one root does not
+/// affect the others; the error carries the panic message.
 /// sequential when fewer than 3 roots, otherwise `std::thread::scope`
-pub fn scan_many(roots: &[std::path::PathBuf]) -> Vec<Result<LayerProfile, String>> {
+pub fn scan_many(roots: &[std::path::PathBuf]) -> Vec<Result<LayerProfile, ScanError>> {
     if roots.len() < PARALLEL_THRESHOLD {
         return roots.iter().map(|r| caught(|| scan(r))).collect();
     }
     std::thread::scope(|s| {
         let handles: Vec<_> = roots.iter().map(|r| s.spawn(|| scan(r))).collect();
-        handles.into_iter().map(|h| h.join().map_err(panic_message)).collect()
+        handles.into_iter().map(|h| h.join().map_err(panic_to_error)).collect()
     })
 }
 
-fn caught(f: impl FnOnce() -> LayerProfile) -> Result<LayerProfile, String> {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(panic_message)
+fn caught(f: impl FnOnce() -> LayerProfile) -> Result<LayerProfile, ScanError> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(panic_to_error)
 }
 
-fn panic_message(payload: Box<dyn std::any::Any + Send>) -> String {
-    if let Some(s) = payload.downcast_ref::<&str>() {
+fn panic_to_error(payload: Box<dyn std::any::Any + Send>) -> ScanError {
+    let msg = if let Some(s) = payload.downcast_ref::<&str>() {
         (*s).to_string()
     } else if let Some(s) = payload.downcast_ref::<String>() {
         s.clone()
     } else {
-        "scan panicked".to_string()
-    }
+        "unknown".to_string()
+    };
+    ScanError::Panic(msg)
 }
