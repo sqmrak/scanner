@@ -39,15 +39,17 @@ fn enter(
         let Ok(rel) = child.path.strip_prefix(root) else {
             continue;
         };
-        let rels = rel.to_string_lossy();
+        let Some(rels) = rel.to_str() else {
+            continue;
+        };
         if !child.is_dir {
-            file_route(&rels, rel, &child.path, p, pending, config);
+            file_route(rels, rel, &child.path, p, pending, config);
             continue;
         }
-        if is_pm_data(&rels) {
+        if is_pm_data(rels) {
             continue;
         }
-        match dir_route(&rels, p.fhs, config) {
+        match dir_route(rels, p.fhs, config) {
             Dir::Theme(name) => {
                 let kind = themes::kind(&child.path);
                 p.themes.push(Theme { path: rel.to_path_buf(), name, kind });
