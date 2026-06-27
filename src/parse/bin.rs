@@ -8,12 +8,22 @@ use std::path::Path;
 
 pub fn parse(rel: &Path, abs: &Path) -> Bin {
     match elf::bin(abs) {
-        Some(b) => {
-            Bin { path: rel.to_path_buf(), interp: b.interp, dynamic: b.dynamic, script: None }
-        }
+        Some(b) => Bin {
+            path: rel.to_path_buf(),
+            interp: b.interp,
+            dynamic: b.dynamic,
+            script: None,
+            needed: b.needed,
+        },
         None => {
             let script = shebang_interp(abs);
-            Bin { path: rel.to_path_buf(), interp: None, dynamic: false, script }
+            Bin {
+                path: rel.to_path_buf(),
+                interp: None,
+                dynamic: false,
+                script,
+                needed: Vec::new(),
+            }
         }
     }
 }

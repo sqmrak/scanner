@@ -20,13 +20,21 @@ pub struct Dyn {
 pub struct BinInfo {
     pub interp: Option<String>,
     pub dynamic: bool,
+    pub needed: Vec<String>,
 }
 
 pub fn bin(path: &Path) -> Option<BinInfo> {
     let mut elf = Elf::open(path)?;
     let dynamic = elf.is_dynamic();
     let interp = elf.interp();
-    Some(BinInfo { interp, dynamic })
+    // DT_NEEDED lives in the dynamic segment; a static binary has none. read_dyn
+    // consumes self, so it runs after interp's borrow ends
+    let needed = if dynamic {
+        elf.read_dyn().map(|d| d.needed).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    Some(BinInfo { interp, dynamic, needed })
 }
 
 pub fn dynamic(path: &Path) -> Option<Dyn> {

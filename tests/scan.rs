@@ -100,6 +100,38 @@ fn static_exe() -> Vec<u8> {
     v
 }
 
+// a dynamic executable that lists one DT_NEEDED. PT_INTERP routes it as a
+// binary; PT_LOAD maps vaddr 0 to file offset 0 so the strtab vaddr is its
+// file offset
+fn dyn_exe_needed(interp: &str, needed: &str) -> Vec<u8> {
+    let phnum = 3u64;
+    let ph_end = 64 + 56 * phnum;
+    let mut interp_bytes = interp.as_bytes().to_vec();
+    interp_bytes.push(0);
+    let interp_off = ph_end;
+    let dyn_off = interp_off + interp_bytes.len() as u64;
+    let dyn_size = 16 * 3u64; // DT_STRTAB, DT_NEEDED, DT_NULL
+    let strtab_off = dyn_off + dyn_size;
+
+    let mut strtab = vec![0u8];
+    let needed_off = strtab.len() as u64;
+    strtab.extend_from_slice(needed.as_bytes());
+    strtab.push(0);
+    let total = strtab_off + strtab.len() as u64;
+
+    let mut v = Vec::new();
+    v.extend_from_slice(&header(2, phnum as u16));
+    v.extend_from_slice(&phdr(1, 0, 0, total)); // PT_LOAD
+    v.extend_from_slice(&phdr(3, interp_off, interp_off, interp_bytes.len() as u64)); // PT_INTERP
+    v.extend_from_slice(&phdr(2, dyn_off, dyn_off, dyn_size)); // PT_DYNAMIC
+    v.extend_from_slice(&interp_bytes);
+    v.extend_from_slice(&dynent(5, strtab_off)); // DT_STRTAB (vaddr)
+    v.extend_from_slice(&dynent(1, needed_off)); // DT_NEEDED
+    v.extend_from_slice(&dynent(0, 0)); // DT_NULL
+    v.extend_from_slice(&strtab);
+    v
+}
+
 // a shared object with one SONAME and one NEEDED. PT_LOAD maps vaddr 0 to file
 // offset 0, so the strtab vaddr equals its file offset
 fn shared(soname: &str, needed: &str) -> Vec<u8> {
@@ -264,6 +296,23 @@ fn bin_parse() {
     let bb = p.bin.iter().find(|b| b.path.ends_with("usr/bin/busybox")).unwrap();
     assert_eq!(bb.interp, None);
     assert!(!bb.dynamic);
+}
+
+#[test]
+fn bin_needed_parsed_for_dynamic_exe() {
+    let t = Tmp::new();
+    t.exec_file("usr/bin/dyn", &dyn_exe_needed("/lib/ld-musl-x86_64.so.1", "libc.so"));
+    t.exec_file("usr/bin/stat", &static_exe());
+    let p = scanner::scan(&t.0);
+
+    // a dynamic binary reports its DT_NEEDED entries
+    let dynbin = p.bin.iter().find(|b| b.path.ends_with("usr/bin/dyn")).unwrap();
+    assert!(dynbin.dynamic);
+    assert_eq!(dynbin.needed, vec!["libc.so".to_string()]);
+
+    // a static binary lists none
+    let stat = p.bin.iter().find(|b| b.path.ends_with("usr/bin/stat")).unwrap();
+    assert!(stat.needed.is_empty());
 }
 
 #[test]

@@ -76,6 +76,9 @@ pub struct Bin {
     /// the shebang interpreter path when the file is not an ELF but starts
     /// with `#!`. None for ELF binaries and non-script files
     pub script: Option<String>,
+    /// DT_NEEDED entries when the binary is a dynamic ELF; empty for static
+    /// binaries and scripts. the shared libraries the binary loads at run
+    pub needed: Vec<String>,
 }
 
 /// a shared library (.so) under a lib root
