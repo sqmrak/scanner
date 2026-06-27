@@ -100,7 +100,10 @@ pub fn scan_with(root: &Path, config: &ScanConfig) -> LayerProfile {
                 .into_iter()
                 .map(|dir| s.spawn(move || traverse(&dir, root, fhs, config)))
                 .collect();
-            handles.into_iter().map(|h| h.join().unwrap()).collect()
+            handles
+                .into_iter()
+                .map(|h| h.join().expect("traverse worker thread panicked"))
+                .collect()
         })
     };
 
