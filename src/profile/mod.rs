@@ -51,6 +51,8 @@ pub struct LayerProfile {
     pub dbus_services: Vec<PathBuf>,
     /// count of firmware blobs under lib/firmware
     pub firmware: usize,
+    /// relative paths of firmware blobs under lib/firmware
+    pub firmware_paths: Vec<PathBuf>,
     /// man pages found under a man/ tree
     pub man: Vec<ManPage>,
 }

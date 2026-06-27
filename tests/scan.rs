@@ -712,6 +712,17 @@ fn firmware() {
     t.file("lib/firmware/edid/1024x768.bin", b"x");
     let p = scanner::scan(&t.0);
     assert_eq!(p.firmware, 3);
+    // the paths are reported too, layer-relative and sorted, so a consumer can
+    // merge the blobs and not just count them
+    use std::path::PathBuf;
+    assert_eq!(
+        p.firmware_paths,
+        vec![
+            PathBuf::from("lib/firmware/edid/1024x768.bin"),
+            PathBuf::from("usr/lib/firmware/amd/cpu.bin"),
+            PathBuf::from("usr/lib/firmware/iwlwifi-1.ucode"),
+        ]
+    );
 }
 
 #[test]

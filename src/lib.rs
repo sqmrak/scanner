@@ -174,6 +174,7 @@ fn merge_profile(dst: &mut LayerProfile, src: LayerProfile) {
     dst.autostart.extend(src.autostart);
     dst.dbus_services.extend(src.dbus_services);
     dst.firmware += src.firmware;
+    dst.firmware_paths.extend(src.firmware_paths);
 }
 
 fn is_kernel_vfs(rel: &str) -> bool {
@@ -206,6 +207,7 @@ fn sort(p: &mut LayerProfile) {
     );
     p.pm_dirs.sort();
     p.mime_paths.sort();
+    p.firmware_paths.sort();
     p.autostart.sort();
     p.dbus_services.sort();
 }

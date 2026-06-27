@@ -214,6 +214,7 @@ fn file_route(
         // firmware blobs and toolchain artifacts sit under lib roots
         if is_firmware(rel) {
             p.firmware += 1;
+            p.firmware_paths.push(relp.to_path_buf());
         }
         return;
     }
@@ -253,6 +254,7 @@ fn file_route(
                 }
                 if is_firmware(rel) {
                     p.firmware += 1;
+                    p.firmware_paths.push(relp.to_path_buf());
                 }
                 return;
             }
