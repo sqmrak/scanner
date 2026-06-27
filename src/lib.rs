@@ -175,6 +175,10 @@ fn merge_profile(dst: &mut LayerProfile, src: LayerProfile) {
     dst.dbus_services.extend(src.dbus_services);
     dst.firmware += src.firmware;
     dst.firmware_paths.extend(src.firmware_paths);
+    dst.udev_rules.extend(src.udev_rules);
+    dst.udev_hwdb.extend(src.udev_hwdb);
+    dst.polkit_rules.extend(src.polkit_rules);
+    dst.polkit_actions.extend(src.polkit_actions);
 }
 
 fn is_kernel_vfs(rel: &str) -> bool {
@@ -208,6 +212,10 @@ fn sort(p: &mut LayerProfile) {
     p.pm_dirs.sort();
     p.mime_paths.sort();
     p.firmware_paths.sort();
+    p.udev_rules.sort();
+    p.udev_hwdb.sort();
+    p.polkit_rules.sort();
+    p.polkit_actions.sort();
     p.autostart.sort();
     p.dbus_services.sort();
 }

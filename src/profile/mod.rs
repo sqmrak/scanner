@@ -53,6 +53,14 @@ pub struct LayerProfile {
     pub firmware: usize,
     /// relative paths of firmware blobs under lib/firmware
     pub firmware_paths: Vec<PathBuf>,
+    /// udev rule files (*.rules) under udev/rules.d
+    pub udev_rules: Vec<PathBuf>,
+    /// udev hardware database files (*.hwdb) under udev/hwdb.d
+    pub udev_hwdb: Vec<PathBuf>,
+    /// polkit rule files (*.rules) under polkit-1/rules.d
+    pub polkit_rules: Vec<PathBuf>,
+    /// polkit action files (*.policy) under polkit-1/actions
+    pub polkit_actions: Vec<PathBuf>,
     /// man pages found under a man/ tree
     pub man: Vec<ManPage>,
 }

@@ -200,6 +200,24 @@ fn file_route(
         }
         return;
     }
+    // udev and polkit files live under both /etc and /usr/lib|/usr/share, so
+    // they are matched by path substring before the lib-root branch returns
+    if is_udev_rule(rel) {
+        p.udev_rules.push(relp.to_path_buf());
+        return;
+    }
+    if is_udev_hwdb(rel) {
+        p.udev_hwdb.push(relp.to_path_buf());
+        return;
+    }
+    if is_polkit_rule(rel) {
+        p.polkit_rules.push(relp.to_path_buf());
+        return;
+    }
+    if is_polkit_action(rel) {
+        p.polkit_actions.push(relp.to_path_buf());
+        return;
+    }
     if under_any(rel, read::BIN_ROOTS) || under_custom(rel, &config.bin_roots) {
         pending.push((relp.to_path_buf(), abs.to_path_buf()));
         return;
@@ -461,4 +479,21 @@ fn is_autostart(rel: &str, relp: &Path) -> bool {
 fn is_dbus_service(rel: &str, relp: &Path) -> bool {
     rel.contains("/dbus-1/services/")
         && relp.extension().and_then(|e| e.to_str()) == Some("service")
+}
+
+// udev and polkit rules are both *.rules, told apart by their directory
+fn is_udev_rule(rel: &str) -> bool {
+    rel.contains("udev/rules.d/") && rel.ends_with(".rules")
+}
+
+fn is_udev_hwdb(rel: &str) -> bool {
+    rel.contains("udev/hwdb.d/") && rel.ends_with(".hwdb")
+}
+
+fn is_polkit_rule(rel: &str) -> bool {
+    rel.contains("polkit-1/rules.d/") && rel.ends_with(".rules")
+}
+
+fn is_polkit_action(rel: &str) -> bool {
+    rel.contains("polkit-1/actions/") && rel.ends_with(".policy")
 }

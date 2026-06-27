@@ -726,6 +726,30 @@ fn firmware() {
 }
 
 #[test]
+fn udev_and_polkit() {
+    let t = Tmp::new();
+    // both etc and usr locations; udev rules and polkit rules are both *.rules,
+    // told apart by directory
+    t.file("etc/udev/rules.d/70-net.rules", b"x");
+    t.file("usr/lib/udev/rules.d/60-block.rules", b"x");
+    t.file("usr/lib/udev/hwdb.d/20-pci.hwdb", b"x");
+    t.file("etc/polkit-1/rules.d/50-org.rules", b"x");
+    t.file("usr/share/polkit-1/actions/org.foo.policy", b"x");
+    let p = scanner::scan(&t.0);
+    use std::path::PathBuf;
+    assert_eq!(
+        p.udev_rules,
+        vec![
+            PathBuf::from("etc/udev/rules.d/70-net.rules"),
+            PathBuf::from("usr/lib/udev/rules.d/60-block.rules"),
+        ]
+    );
+    assert_eq!(p.udev_hwdb, vec![PathBuf::from("usr/lib/udev/hwdb.d/20-pci.hwdb")]);
+    assert_eq!(p.polkit_rules, vec![PathBuf::from("etc/polkit-1/rules.d/50-org.rules")]);
+    assert_eq!(p.polkit_actions, vec![PathBuf::from("usr/share/polkit-1/actions/org.foo.policy")]);
+}
+
+#[test]
 fn kernel_vfs() {
     let t = Tmp::new();
     t.dir("etc");
